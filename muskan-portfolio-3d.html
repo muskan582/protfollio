@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Muskan Motwani — 3D Portfolio</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Sora:wght@200;300;400;500&display=swap" rel="stylesheet"/>
+<style>
+/* ═══════════════════════════════════════════
+   TOKENS
+═══════════════════════════════════════════ */
+:root{
+  --bg:#06070c;
+  --accent:#5eead4;
+  --accent2:#a78bfa;
+  --accent-glow:rgba(94,234,212,.4);
+  --accent2-glow:rgba(167,139,250,.35);
+  --text:#eef1f5;
+  --text-dim:rgba(238,241,245,.48);
+  --card-bg:rgba(18,20,30,.65);
+  --card-border:rgba(94,234,212,.14);
+  --radius:18px;
+  --font-d:'Playfair Display',Georgia,serif;
+  --font-b:'Sora',system-ui,sans-serif;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font-family:var(--font-b);font-weight:300;cursor:default}
+
+/* ═══════════════════════════════════════════
+   THREE.JS BG
+═══════════════════════════════════════════ */
+#bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none}
+
+/* ═══════════════════════════════════════════
+   AMBIENT ORBS
+═══════════════════════════════════════════ */
+.orb{position:fixed;border-radius:50%;filter:blur(90px);opacity:.18;pointer-events:none;z-index:1;animation:drift 18s ease-in-out infinite alternate}
+.orb--1{width:420px;height:420px;background:var(--accent);top:-120px;left:-100px}
+.orb--2{width:320px;height:320px;background:var(--accent2);bottom:-80px;right:-60px;animation-delay:-6s}
+.orb--3{width:260px;height:260px;background:var(--accent);top:40%;left:60%;animation-delay:-12s}
+@keyframes drift{0%{transform:translate(0,0) scale(1)}100%{transform:translate(40px,50px) scale(1.15)}}
+
+/* ═══════════════════════════════════════════
+   PAGE STACK — the core layout system
+   Each .page is fullscreen, stacked, transitions on .active
+═══════════════════════════════════════════ */
+.pages{position:fixed;inset:0;z-index:10;perspective:1400px}
+.page{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:2rem 1.5rem;
+  overflow-y:auto;overflow-x:hidden;
+  opacity:0;
+  transform:translateY(60px) translateZ(-40px) rotateX(2deg);
+  transition:opacity .85s cubic-bezier(.16,1,.3,1),transform .85s cubic-bezier(.16,1,.3,1);
+  pointer-events:none;
+  /* needed so scrolling inside a page works */
+  scrollbar-width:none;
+}
+.page::-webkit-scrollbar{display:none}
+.page.active{
+  opacity:1;
+  transform:translateY(0) translateZ(0) rotateX(0deg);
+  pointer-events:auto;
+}
+/* page leaving upward */
+.page.exit-up{
+  opacity:0;
+  transform:translateY(-60px) translateZ(-40px) rotateX(-2deg);
+  transition:opacity .7s cubic-bezier(.55,0,.55,1),transform .7s cubic-bezier(.55,0,.55,1);
+  pointer-events:none;
+}
+
+/* ═══════════════════════════════════════════
+   NAV DOTS (right side)
+═══════════════════════════════════════════ */
+.nav-dots{
+  position:fixed;right:1.8rem;top:50%;transform:translateY(-50%);
+  z-index:300;display:flex;flex-direction:column;gap:.75rem;align-items:center
+}
+.nav-dot{
+  width:8px;height:8px;border-radius:50%;
+  border:1.5px solid rgba(94,234,212,.35);
+  background:transparent;
+  transition:all .35s cubic-bezier(.16,1,.3,1);
+  cursor:pointer;
+}
+.nav-dot.active{
+  background:var(--accent);
+  border-color:var(--accent);
+  box-shadow:0 0 10px var(--accent-glow);
+  transform:scale(1.35);
+}
+.nav-dot:hover{border-color:var(--accent);background:rgba(94,234,212,.25)}
+
+/* ═══════════════════════════════════════════
+   PAGE COUNTER (bottom center)
+═══════════════════════════════════════════ */
+.page-counter{
+  position:fixed;bottom:1.8rem;left:50%;transform:translateX(-50%);
+  z-index:300;display:flex;align-items:center;gap:1rem
+}
+.page-counter__num{
+  font-size:.62rem;font-weight:400;letter-spacing:.18em;
+  color:var(--text-dim);font-family:var(--font-d)
+}
+.page-counter__num span{color:var(--accent);font-weight:700}
+.page-counter__hint{
+  font-size:.54rem;letter-spacing:.22em;text-transform:uppercase;
+  color:rgba(238,241,245,.22);
+  animation:hintPulse 2.8s ease-in-out infinite
+}
+@keyframes hintPulse{0%,100%{opacity:.3}50%{opacity:.7}}
+
+/* ═══════════════════════════════════════════
+   HERO PAGE
+═══════════════════════════════════════════ */
+.hero__name{font-family:var(--font-d);font-weight:400;font-size:clamp(3.2rem,9vw,7rem);line-height:1;letter-spacing:-.02em;overflow:hidden;text-align:center}
+.hero__line{display:block;opacity:0;transform:translateY(100%);transition:opacity .9s cubic-bezier(.16,1,.3,1),transform .9s cubic-bezier(.16,1,.3,1)}
+.page.active .hero__line{opacity:1;transform:translateY(0)}
+.hero__line--1{transition-delay:.15s}
+.hero__line--2{transition-delay:.3s;font-style:italic;color:var(--accent);text-shadow:0 0 60px var(--accent-glow)}
+.hero__line--3{transition-delay:.5s;font-size:.38em;font-family:var(--font-b);font-weight:300;letter-spacing:.22em;text-transform:uppercase;color:var(--text-dim);margin-top:.6em}
+
+.hero__tags{margin-top:2rem;display:flex;flex-wrap:wrap;justify-content:center;gap:.55rem}
+.hero__tag{
+  font-size:.62rem;font-weight:400;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--accent);border:1px solid var(--card-border);border-radius:24px;
+  padding:.32rem .82rem;background:rgba(94,234,212,.08);
+  opacity:0;transform:translateY(10px);
+  transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1),background .3s,border-color .3s,box-shadow .3s
+}
+.page.active .hero__tag{opacity:1;transform:translateY(0)}
+.hero__tag:nth-child(1){transition-delay:.6s}
+.hero__tag:nth-child(2){transition-delay:.7s}
+.hero__tag:nth-child(3){transition-delay:.8s}
+.hero__tag:nth-child(4){transition-delay:.9s}
+.hero__tag:nth-child(5){transition-delay:1s}
+.hero__tag:hover{background:rgba(94,234,212,.2);border-color:var(--accent);box-shadow:0 6px 20px var(--accent-glow)}
+
+/* ═══════════════════════════════════════════
+   SECTION CONTENT (used inside pages)
+═══════════════════════════════════════════ */
+.sec-inner{max-width:820px;width:100%;padding:1rem 0}
+
+/* ═══════════════════════════════════════════
+   SECTION HEADER
+═══════════════════════════════════════════ */
+.sh{margin-bottom:2rem}
+.sh__label{
+  font-size:.6rem;font-weight:400;letter-spacing:.32em;text-transform:uppercase;
+  color:var(--accent);display:flex;align-items:center;gap:.7rem;margin-bottom:.6rem;
+  opacity:0;transform:translateX(-20px);
+  transition:opacity .7s .1s cubic-bezier(.16,1,.3,1),transform .7s .1s cubic-bezier(.16,1,.3,1)
+}
+.sh__label::before{content:'';width:18px;height:1px;background:var(--accent);box-shadow:0 0 6px var(--accent-glow)}
+.sh__label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--card-border),transparent)}
+.page.active .sh__label{opacity:1;transform:translateX(0)}
+
+.sh__title{
+  font-family:var(--font-d);font-weight:400;font-size:clamp(1.8rem,3.4vw,2.6rem);color:var(--text);
+  opacity:0;transform:translateY(16px);
+  transition:opacity .8s .2s cubic-bezier(.16,1,.3,1),transform .8s .2s cubic-bezier(.16,1,.3,1)
+}
+.page.active .sh__title{opacity:1;transform:translateY(0)}
+
+/* ═══════════════════════════════════════════
+   PROSE
+═══════════════════════════════════════════ */
+.prose{
+  color:var(--text-dim);font-size:.88rem;line-height:1.95;max-width:640px;
+  opacity:0;transform:translateY(18px);
+  transition:opacity .8s cubic-bezier(.16,1,.3,1),transform .8s cubic-bezier(.16,1,.3,1)
+}
+.prose+.prose{margin-top:.9rem}
+.page.active .prose:nth-of-type(1){opacity:1;transform:translateY(0);transition-delay:.28s}
+.page.active .prose:nth-of-type(2){opacity:1;transform:translateY(0);transition-delay:.38s}
+
+/* ═══════════════════════════════════════════
+   3D CARDS
+═══════════════════════════════════════════ */
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:1.2rem;margin-top:1.6rem}
+.card{
+  position:relative;background:var(--card-bg);border:1px solid var(--card-border);
+  border-radius:var(--radius);padding:1.8rem 1.5rem 1.6rem;overflow:hidden;
+  transform-style:preserve-3d;
+  box-shadow:0 8px 40px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.04);
+  cursor:pointer;backdrop-filter:blur(8px);
+  opacity:0;transform:translateY(30px) scale(.96);
+  transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1),box-shadow .5s,border-color .4s
+}
+.page.active .card:nth-child(1){opacity:1;transform:translateY(0) scale(1);transition-delay:.3s}
+.page.active .card:nth-child(2){opacity:1;transform:translateY(0) scale(1);transition-delay:.42s}
+.page.active .card:nth-child(3){opacity:1;transform:translateY(0) scale(1);transition-delay:.54s}
+/* gloss */
+.card::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,.07) 0%,transparent 50%,rgba(255,255,255,.02) 100%);
+  border-radius:var(--radius);pointer-events:none;z-index:1
+}
+/* glow */
+.card::after{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at var(--mx,50%) var(--my,50%),rgba(94,234,212,.12) 0%,transparent 65%);
+  border-radius:var(--radius);pointer-events:none;z-index:1;opacity:0;transition:opacity .4s
+}
+.card:hover::after{opacity:1}
+.card:hover{border-color:var(--accent);box-shadow:0 20px 60px rgba(0,0,0,.55),0 0 40px var(--accent-glow),inset 0 1px 0 rgba(255,255,255,.08)}
+.card__content{position:relative;z-index:2}
+.card__num{position:absolute;top:1rem;right:1.2rem;font-family:var(--font-d);font-size:2.8rem;font-weight:700;color:rgba(94,234,212,.06);line-height:1;z-index:0;user-select:none;pointer-events:none}
+.card__icon{font-size:1.5rem;display:block;margin-bottom:.5rem}
+.card__title{font-size:.72rem;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:.45rem}
+.card__body{font-size:.78rem;color:var(--text-dim);line-height:1.7}
+
+/* ═══════════════════════════════════════════
+   SKILL TAGS
+═══════════════════════════════════════════ */
+.tags{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.2rem}
+.tag{
+  font-size:.64rem;font-weight:400;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--accent);border:1px solid var(--card-border);border-radius:22px;
+  padding:.34rem .78rem;background:rgba(94,234,212,.06);
+  opacity:0;transform:translateY(10px) scale(.95);
+  transition:opacity .5s cubic-bezier(.16,1,.3,1),transform .5s cubic-bezier(.16,1,.3,1),background .3s,border-color .3s,box-shadow .3s
+}
+.page.active .tag{opacity:1;transform:translateY(0) scale(1)}
+.tag:hover{background:rgba(94,234,212,.18);border-color:var(--accent);transform:translateY(-3px) scale(1.04) !important;box-shadow:0 6px 22px var(--accent-glow)}
+
+/* ═══════════════════════════════════════════
+   TIMELINE
+═══════════════════════════════════════════ */
+.timeline{margin-top:1.4rem}
+.tl-item{
+  display:flex;gap:1.6rem;padding:1.5rem 0;
+  border-bottom:1px solid var(--card-border);
+  position:relative;
+  opacity:0;transform:translateX(-24px);
+  transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)
+}
+.tl-item:last-child{border-bottom:none}
+.page.active .tl-item:nth-child(1){opacity:1;transform:translateX(0);transition-delay:.28s}
+.page.active .tl-item:nth-child(2){opacity:1;transform:translateX(0);transition-delay:.4s}
+.page.active .tl-item:nth-child(3){opacity:1;transform:translateX(0);transition-delay:.52s}
+/* hover shift */
+.tl-item:hover{transform:translateX(8px) !important}
+/* glow line */
+.tl-item::before{
+  content:'';position:absolute;left:-2rem;top:0;bottom:0;width:2px;
+  background:linear-gradient(to bottom,transparent,var(--accent),transparent);
+  opacity:0;transition:opacity .4s
+}
+.tl-item:hover::before{opacity:1}
+.tl-dot{
+  flex-shrink:0;width:12px;height:12px;border-radius:50%;
+  background:var(--accent);margin-top:.55rem;
+  box-shadow:0 0 14px var(--accent-glow);
+  transition:transform .4s,box-shadow .4s
+}
+.tl-item:hover .tl-dot{transform:scale(1.4);box-shadow:0 0 24px var(--accent-glow)}
+.tl-c h4{font-weight:500;font-size:.86rem;color:var(--text);margin-bottom:.18rem}
+.tl-c .meta{font-size:.66rem;color:var(--accent);letter-spacing:.12em;margin-bottom:.38rem}
+.tl-c p{font-size:.77rem;color:var(--text-dim);line-height:1.75}
+
+/* ═══════════════════════════════════════════
+   CONTACT BUTTONS
+═══════════════════════════════════════════ */
+.contact-row{display:flex;flex-wrap:wrap;gap:.8rem;margin-top:1.6rem}
+.contact-btn{
+  color:var(--text-dim);text-decoration:none;font-size:.68rem;font-weight:400;
+  letter-spacing:.2em;text-transform:uppercase;
+  border:1px solid var(--card-border);border-radius:12px;
+  padding:.7rem 1.5rem;background:var(--card-bg);backdrop-filter:blur(8px);
+  box-shadow:0 6px 24px rgba(0,0,0,.35);
+  opacity:0;transform:translateY(14px);
+  transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1),color .3s,border-color .3s,box-shadow .4s
+}
+.page.active .contact-btn:nth-child(1){opacity:1;transform:translateY(0);transition-delay:.34s}
+.page.active .contact-btn:nth-child(2){opacity:1;transform:translateY(0);transition-delay:.46s}
+.contact-btn:hover{color:var(--accent);border-color:var(--accent);transform:translateY(-4px) scale(1.03) !important;box-shadow:0 16px 48px rgba(0,0,0,.45),0 0 30px var(--accent-glow)}
+
+/* ═══════════════════════════════════════════
+   FOOTER LINE (last page)
+═══════════════════════════════════════════ */
+.footer-line{
+  margin-top:2rem;color:var(--text-dim);font-size:.6rem;letter-spacing:.22em;text-transform:uppercase;text-align:center;
+  opacity:0;transition:opacity .6s .6s cubic-bezier(.16,1,.3,1)
+}
+.page.active .footer-line{opacity:1}
+
+/* ═══════════════════════════════════════════
+   RESPONSIVE
+═══════════════════════════════════════════ */
+@media(max-width:640px){
+  .nav-dots{right:.9rem;gap:.55rem}
+  .nav-dot{width:6px;height:6px}
+  .page{padding:2rem 1.1rem}
+  .card-grid{grid-template-columns:1fr}
+  .hero__name{font-size:clamp(2.6rem,12vw,3.8rem)}
+  .page-counter{bottom:1rem}
+  .page-counter__hint{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ── THREE.JS BG ── -->
+<div id="bg-canvas"></div>
+
+<!-- ── ORBS ── -->
+<div class="orb orb--1"></div>
+<div class="orb orb--2"></div>
+<div class="orb orb--3"></div>
+
+<!-- ── NAV DOTS ── -->
+<div class="nav-dots" id="navDots"></div>
+
+<!-- ── PAGE COUNTER ── -->
+<div class="page-counter">
+  <span class="page-counter__num"><span id="curPage">1</span> / <span id="totPage">8</span></span>
+  <span class="page-counter__hint">Press Enter to continue</span>
+</div>
+
+<!-- ══════════════════════════════════════
+   PAGE STACK
+══════════════════════════════════════ -->
+<div class="pages" id="pages">
+
+  <!-- PAGE 0 — HERO -->
+  <div class="page active" data-page="0">
+    <h1 class="hero__name">
+      <span class="hero__line hero__line--1">Muskan</span>
+      <span class="hero__line hero__line--2">Motwani</span>
+      <span class="hero__line hero__line--3">Web · WordPress · Frontend · Bots</span>
+    </h1>
+    <div class="hero__tags">
+      <span class="hero__tag">Web Developer</span>
+      <span class="hero__tag">WordPress Dev</span>
+      <span class="hero__tag">Frontend</span>
+      <span class="hero__tag">Bot Developer</span>
+      <span class="hero__tag">Rajasthan, India</span>
+    </div>
+  </div>
+
+  <!-- PAGE 1 — ABOUT -->
+  <div class="page" data-page="1">
+    <div class="sec-inner">
+      <div class="sh">
+        <div class="sh__label">About</div>
+        <h2 class="sh__title">A little about me</h2>
+      </div>
+      <p class="prose">
+        I'm a web developer based in Rajasthan, India — passionate about building clean, modern,
+        and genuinely user-friendly digital experiences. My foundation was built during my BCA at
+        Aryan International College and sharpened through hands-on professional work at Digitoria,
+        where I shipped real WordPress sites and landing pages for actual clients.
+      </p>
+      <p class="prose">
+        Beyond code, I'm a creative — dance, reading, and writing keep me grounded. I'm a fast
+        learner and a reliable collaborator who thrives in dynamic environments. Right now I'm
+        open to freelance, remote, and full-time roles where I can keep pushing my craft and
+        building things that matter.
+      </p>
+    </div>
+  </div>
+
+  <!-- PAGE 2 — SKILLS -->
+  <div class="page" data-page="2">
+    <div class="sec-inner">
+      <div class="sh">
+        <div class="sh__label">Skills</div>
+        <h2 class="sh__title">What I work with</h2>
+      </div>
+      <div class="tags">
+        <span class="tag" style="transition-delay:.3s">HTML5</span>
+        <span class="tag" style="transition-delay:.34s">CSS3</span>
+        <span class="tag" style="transition-delay:.38s">JavaScript ES6</span>
+        <span class="tag" style="transition-delay:.42s">Node.js</span>
+        <span class="tag" style="transition-delay:.46s">WordPress</span>
+        <span class="tag" style="transition-delay:.5s">Telegram Bots</span>
+        <span class="tag" style="transition-delay:.54s">Responsive Design</span>
+        <span class="tag" style="transition-delay:.58s">Git</span>
+        <span class="tag" style="transition-delay:.62s">cPanel</span>
+        <span class="tag" style="transition-delay:.66s">Hostinger</span>
+        <span class="tag" style="transition-delay:.7s">VS Code</span>
+        <span class="tag" style="transition-delay:.74s">Canva</span>
+        <span class="tag" style="transition-delay:.78s">C / C++</span>
+        <span class="tag" style="transition-delay:.82s">Python</span>
+        <span class="tag" style="transition-delay:.86s">Java</span>
+        <span class="tag" style="transition-delay:.9s">Tally</span>
+      </div>
+      <div class="card-grid">
+        <div class="card" data-card>
+          <span class="card__num">01</span>
+          <div class="card__content">
+            <span class="card__icon">◆</span>
+            <div class="card__title">Frontend</div>
+            <p class="card__body">Responsive, polished websites with HTML5, CSS3 & modern JS — performance-first, interface-driven.</p>
+          </div>
+        </div>
+        <div class="card" data-card>
+          <span class="card__num">02</span>
+          <div class="card__content">
+            <span class="card__icon">◇</span>
+            <div class="card__title">WordPress</div>
+            <p class="card__body">Custom themes, conversion landing pages, full deployment lifecycle — built for real clients, real results.</p>
+          </div>
+        </div>
+        <div class="card" data-card>
+          <span class="card__num">03</span>
+          <div class="card__content">
+            <span class="card__icon">⬡</span>
+            <div class="card__title">Automation</div>
+            <p class="card__body">Telegram bots via Node.js — automating workflows and delivering interactive, real-time experiences.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 3 — EDUCATION -->
+  <div class="page" data-page="3">
+    <div class="sec-inner">
+      <div class="sh">
+        <div class="sh__label">Education</div>
+        <h2 class="sh__title">Where I learned</h2>
+      </div>
+      <div class="timeline">
+        <div class="tl-item">
+          <div class="tl-dot"></div>
+          <div class="tl-c">
+            <h4>Bachelor of Computer Applications (BCA)</h4>
+            <div class="meta">Aryan International College, Ajmer · 2022–2025 · 75%</div>
+            <p>Deep focus on programming, databases, and web tech. Built the technical foundation I now rely on every day — from software design to hands-on development projects.</p>
+          </div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-dot"></div>
+          <div class="tl-c">
+            <h4>Class 12 — Commerce</h4>
+            <div class="meta">St. Francis Sr. Sec. School, Ajmer · 2021–2022 · 91%</div>
+            <p>Topped the class with strong analytical skills — commerce and business thinking that now complements my technical work.</p>
+          </div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-dot"></div>
+          <div class="tl-c">
+            <h4>Class 10</h4>
+            <div class="meta">St. Francis Sr. Sec. School, Ajmer · 2018–2019</div>
+            <p>Foundational schooling that sparked an early curiosity toward technology — the start of everything.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 4 — EXPERIENCE -->
+  <div class="page" data-page="4">
+    <div class="sec-inner">
+      <div class="sh">
+        <div class="sh__label">Experience</div>
+        <h2 class="sh__title">Where I've worked</h2>
+      </div>
+      <div class="timeline">
+        <div class="tl-item">
+          <div class="tl-dot"></div>
+          <div class="tl-c">
+            <h4>WordPress Web Developer</h4>
+            <div class="meta">Digitoria · 1 Year</div>
+            <p>Designed & developed responsive WordPress sites and conversion-focused landing pages for real clients. Customized themes, managed Hostinger deployments, and improved performance end-to-end. Full lifecycle experience — from brief to launch to maintenance.</p>
+          </div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-dot"></div>
+          <div class="tl-c">
+            <h4>Ticketing Department</h4>
+            <div class="meta">Satguru International · 2 Months</div>
+            <p>Managed ticketing systems and data workflows in a professional environment. Built cross-team collaboration and structured problem-solving skills.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 5 — PROJECTS -->
+  <div class="page" data-page="5">
+    <div class="sec-inner">
+      <div class="sh">
+        <div class="sh__label">Projects</div>
+        <h2 class="sh__title">Things I've built</h2>
+      </div>
+      <div class="card-grid">
+        <div class="card" data-card>
+          <span class="card__num">01</span>
+          <div class="card__content">
+            <span class="card__icon">◆</span>
+            <div class="card__title">Telegram Bot</div>
+            <p class="card__body">Fully functional automation bot in Node.js — real-time responses, API integration, conversational UX. A deep dive into backend and bot architecture.</p>
+          </div>
+        </div>
+        <div class="card" data-card>
+          <span class="card__num">02</span>
+          <div class="card__content">
+            <span class="card__icon">◇</span>
+            <div class="card__title">Business Websites</div>
+            <p class="card__body">Multiple responsive sites built with HTML, CSS & WordPress — pixel-perfect on every device, driving real engagement for clients.</p>
+          </div>
+        </div>
+        <div class="card" data-card>
+          <span class="card__num">03</span>
+          <div class="card__content">
+            <span class="card__icon">⬡</span>
+            <div class="card__title">Landing Pages</div>
+            <p class="card__body">Conversion-optimized pages with clear CTAs and clean structure — built to turn visitors into customers.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 6 — GOALS -->
+  <div class="page" data-page="6">
+    <div class="sec-inner">
+      <div class="sh">
+        <div class="sh__label">Goals</div>
+        <h2 class="sh__title">Where I'm headed</h2>
+      </div>
+      <p class="prose">
+        I'm looking to grow into a well-rounded full-stack developer — going deeper into Node.js
+        and modern JS frameworks while expanding into backend systems and cloud deployment. I want
+        to be on a team shipping meaningful products, in an environment that pushes me to get better
+        every day.
+      </p>
+      <p class="prose">
+        Long-term? Building things that solve real problems for real people. I'm drawn to
+        organizations that value clean code, thoughtful design, and a culture of learning.
+        Startup, remote team, freelance — I'm ready to bring energy, reliability, and genuine
+        passion to whatever comes next.
+      </p>
+    </div>
+  </div>
+
+  <!-- PAGE 7 — CONTACT -->
+  <div class="page" data-page="7">
+    <div class="sec-inner" style="text-align:center;align-items:center;display:flex;flex-direction:column">
+      <div class="sh" style="text-align:center;align-items:center">
+        <div class="sh__label" style="justify-content:center">Contact</div>
+        <h2 class="sh__title">Let's connect</h2>
+      </div>
+      <p class="prose" style="text-align:center;max-width:500px">Open to freelance, remote, and full-time. Got a project? Just want to say hi? I'd love to hear from you.</p>
+      <div class="contact-row" style="justify-content:center">
+        <a class="contact-btn" href="mailto:muskanmotwani992@gmail.com">✉ Email</a>
+        <a class="contact-btn" href="tel:+916350212922">☎ Phone</a>
+      </div>
+      <div class="footer-line">© 2026 Muskan Motwani — All rights reserved</div>
+    </div>
+  </div>
+
+</div><!-- /pages -->
+
+<!-- ══════════════════════════════════════
+   JS
+══════════════════════════════════════ -->
+<script>
+(function(){
+"use strict";
+
+// ═══════════════════════════════════════════
+// PAGE NAVIGATION SYSTEM
+// ═══════════════════════════════════════════
+const pages   = document.querySelectorAll('.page');
+const total   = pages.length;
+let current   = 0;
+let animating = false;
+
+// build nav dots
+const dotsContainer = document.getElementById('navDots');
+const dots = [];
+for(let i=0;i<total;i++){
+  const d = document.createElement('div');
+  d.className = 'nav-dot' + (i===0?' active':'');
+  d.addEventListener('click', ()=> goTo(i));
+  dotsContainer.appendChild(d);
+  dots.push(d);
+}
+document.getElementById('totPage').textContent = total;
+
+function goTo(idx){
+  if(idx===current || animating || idx<0 || idx>=total) return;
+  animating = true;
+
+  const prev = pages[current];
+  const next = pages[idx];
+  const dir  = idx > current ? 'up' : 'down';
+
+  // exit current
+  prev.classList.remove('active');
+  prev.classList.add(dir==='up' ? 'exit-up' : ''); // going forward = exit up
+  // if going backward, just let it fall (no class = default state = below)
+
+  // enter next
+  next.classList.add('active');
+
+  // update dots + counter
+  dots[current].classList.remove('active');
+  dots[idx].classList.add('active');
+  document.getElementById('curPage').textContent = idx+1;
+
+  // update hint text
+  const hint = document.querySelector('.page-counter__hint');
+  if(idx === total-1) hint.textContent = 'Press Backspace to go back';
+  else if(idx === 0)  hint.textContent = 'Press Enter to continue';
+  else                hint.textContent = 'Press Enter to continue';
+
+  current = idx;
+
+  // cleanup exit class after transition
+  setTimeout(()=>{
+    prev.classList.remove('exit-up');
+    animating = false;
+  }, 900);
+}
+
+// ─── KEYBOARD ───
+document.addEventListener('keydown', e => {
+  if(e.key === 'Enter' || e.key === 'ArrowDown' || e.key === ' '){
+    e.preventDefault();
+    goTo(current+1);
+  }
+  if(e.key === 'Backspace' || e.key === 'ArrowUp'){
+    e.preventDefault();
+    goTo(current-1);
+  }
+});
+
+// ─── TOUCH / SWIPE ───
+let touchStartY = 0;
+let touchStartTime = 0;
+document.addEventListener('touchstart', e => {
+  touchStartY    = e.touches[0].clientY;
+  touchStartTime = Date.now();
+},{passive:true});
+document.addEventListener('touchend', e => {
+  const dy   = touchStartY - e.changedTouches[0].clientY;
+  const dt   = Date.now() - touchStartTime;
+  // quick tap (no significant movement) = go forward
+  if(Math.abs(dy) < 30 && dt < 300){
+    goTo(current+1);
+    return;
+  }
+  // swipe up = next, swipe down = prev
+  if(Math.abs(dy) > 40 && dt < 600){
+    if(dy > 0) goTo(current+1);
+    else       goTo(current-1);
+  }
+},{passive:true});
+
+// ═══════════════════════════════════════════
+// THREE.JS BG
+// ═══════════════════════════════════════════
+const mouse = {x:0,y:0,tx:0,ty:0};
+document.addEventListener('mousemove', e => {
+  mouse.x = (e.clientX/window.innerWidth -0.5)*2;
+  mouse.y = (e.clientY/window.innerHeight-0.5)*2;
+});
+document.addEventListener('touchmove', e => {
+  const t=e.touches[0];
+  mouse.x=(t.clientX/window.innerWidth -0.5)*2;
+  mouse.y=(t.clientY/window.innerHeight-0.5)*2;
+},{passive:true});
+
+const bgEl   = document.getElementById('bg-canvas');
+const scene  = new THREE.Scene();
+scene.background = new THREE.Color(0x06070c);
+const camera = new THREE.PerspectiveCamera(60,window.innerWidth/window.innerHeight,0.1,400);
+camera.position.z = 50;
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.setSize(window.innerWidth,window.innerHeight);
+bgEl.appendChild(renderer.domElement);
+
+// stars
+function makeStars(n,spread,size,color,opacity){
+  const g=new THREE.BufferGeometry(),p=new Float32Array(n*3);
+  for(let i=0;i<n*3;i++) p[i]=(Math.random()-.5)*spread;
+  g.setAttribute('position',new THREE.BufferAttribute(p,3));
+  return new THREE.Points(g,new THREE.PointsMaterial({color,size,transparent:true,opacity}));
+}
+const s1=makeStars(1800,180,.28,0xbbd4ee,.9);
+const s2=makeStars(1200,300,.18,0x7799bb,.6);
+const s3=makeStars(600 ,420,.45,0x445566,.35);
+scene.add(s1,s2,s3);
+
+// planet
+const planet=new THREE.Mesh(
+  new THREE.SphereGeometry(3.2,64,64),
+  new THREE.MeshPhongMaterial({color:0x1a3050,specular:0x5599bb,shininess:40,emissive:0x0d1f35})
+);
+planet.position.set(12,-4,-20);
+scene.add(planet);
+const atmos=new THREE.Mesh(
+  new THREE.SphereGeometry(3.55,64,64),
+  new THREE.MeshBasicMaterial({color:0x5eead4,transparent:true,opacity:.06,side:THREE.BackSide})
+);
+atmos.position.copy(planet.position);
+scene.add(atmos);
+
+// particles
+const particles=[];
+const pG=new THREE.SphereGeometry(.12,8,8);
+for(let i=0;i<60;i++){
+  const m=new THREE.Mesh(pG,new THREE.MeshBasicMaterial({color:0x5eead4,transparent:true,opacity:.55}));
+  m.position.set((Math.random()-.5)*100,(Math.random()-.5)*80,(Math.random()-.5)*60-10);
+  m.userData={speed:.15+Math.random()*.35,offset:Math.random()*Math.PI*2};
+  scene.add(m); particles.push(m);
+}
+
+// lighting
+scene.add(new THREE.AmbientLight(0x334455,.8));
+const dL=new THREE.DirectionalLight(0x5eead4,1); dL.position.set(10,12,15); scene.add(dL);
+const fL=new THREE.DirectionalLight(0xa78bfa,.45); fL.position.set(-8,-6,-10); scene.add(fL);
+
+window.addEventListener('resize',()=>{
+  camera.aspect=window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth,window.innerHeight);
+});
+
+const clock=new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const t=clock.getElapsedTime();
+  mouse.tx+=(mouse.x-mouse.tx)*.04;
+  mouse.ty+=(mouse.y-mouse.ty)*.04;
+  camera.position.x+=(mouse.tx*8-camera.position.x)*.035;
+  camera.position.y+=(-mouse.ty*5-camera.position.y)*.035;
+  camera.lookAt(0,0,0);
+  s1.position.x=mouse.tx*3; s1.position.y=-mouse.ty*2;
+  s2.position.x=mouse.tx*1.5; s2.position.y=-mouse.ty*1;
+  s3.position.x=mouse.tx*.6; s3.position.y=-mouse.ty*.4;
+  planet.rotation.y+=.002; atmos.rotation.y+=.002;
+  planet.position.y=-4+Math.sin(t*.4)*.6;
+  atmos.position.y=planet.position.y;
+  particles.forEach(p=>{
+    const d=p.userData;
+    p.position.y+=Math.sin(t*d.speed+d.offset)*.018;
+    p.position.x+=Math.cos(t*d.speed*.7+d.offset)*.012;
+    p.material.opacity=.3+Math.sin(t*d.speed*1.2+d.offset)*.25;
+  });
+  renderer.render(scene,camera);
+}
+animate();
+
+// ═══════════════════════════════════════════
+// 3D CARD TILT
+// ═══════════════════════════════════════════
+document.querySelectorAll('[data-card]').forEach(card=>{
+  card.addEventListener('mousemove',e=>{
+    const r=card.getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width-.5;
+    const y=(e.clientY-r.top)/r.height-.5;
+    card.style.transform=`perspective(800px) rotateX(${-y*14}deg) rotateY(${x*14}deg) translateZ(24px)`;
+    card.style.setProperty('--mx',(x+.5)*100+'%');
+    card.style.setProperty('--my',(y+.5)*100+'%');
+  });
+  card.addEventListener('mouseleave',()=>{
+    card.style.transform='perspective(800px) rotateX(0) rotateY(0) translateZ(0)';
+  });
+  card.addEventListener('touchmove',e=>{
+    e.preventDefault();
+    const t=e.touches[0],r=card.getBoundingClientRect();
+    const x=(t.clientX-r.left)/r.width-.5, y=(t.clientY-r.top)/r.height-.5;
+    card.style.transform=`perspective(800px) rotateX(${-y*10}deg) rotateY(${x*10}deg) translateZ(18px)`;
+  },{passive:false});
+  card.addEventListener('touchend',()=>{
+    card.style.transform='perspective(800px) rotateX(0) rotateY(0) translateZ(0)';
+  });
+});
+
+})();
+</script>
+</body>
+</html>
